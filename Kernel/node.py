@@ -13,17 +13,17 @@ class Node(object):
     ---------
     id : int or str
         Unique ID.
-    x : flaot 	
-        Actual X coordiante
-    y : flaot 
-        Actual Y Coordiante
+    x : float 	
+        Actual X coordinate
+    y : float 
+        Actual Y coordinate
 
     #TODO for now not used:
     reference_x : float 
         Reference X coordinate.
     reference_y : float
-        Reference Y coordiante.
-    u : flaot 
+        Reference Y coordinate.
+    u : float 
         Displacement in x direction
     v : float
         Displacement in y direction
@@ -41,7 +41,7 @@ class Node(object):
 
     def get_actual_location(self):
         """
-        Locaation of the node in the actiual configuration.
+        Location of the node in the actual configuration.
 
         Returns
         -------
