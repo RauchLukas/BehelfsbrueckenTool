@@ -24,7 +24,9 @@ if sys.version_info < (3, 5):
 
 from .model import Model
 from .node import Node
+from .element import Element
 from .material import Material
+from .crosssection import Crosssection
 
 
 def test():
