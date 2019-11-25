@@ -19,10 +19,10 @@ class Crosssection(object):
 
     """
 
-def __init__(self, id, area, Iz):
-    """
-    creating a new local element crosssection.
-    """
-    self.id = id
-    self.area = area 
-    self.Iz = Iz
+    def __init__(self, id, area, Iz):
+        """
+        creating a new local element crosssection.
+        """
+        self.id = id
+        self.area = area 
+        self.Iz = Iz
