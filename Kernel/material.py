@@ -6,18 +6,18 @@ Author: Lukas Rauch
 
 class Material(object):
     """
-    Matreral data of a local cross section.
+    Material data of a local cross section.
 
     Attributes 
     ---------
     id : int or str
         Unique matrial ID.
     density : float
-        Material densitiy to calculate the material weight.
+        Material density to calculate the material weight.
     youngs_modulus : float
         Material young's modulus.
     fmk : float
-        Avarage bending stiffness - charactraristic.
+        Avarage bending stiffness - characteristic.
     ft0k : float
         Tension stiffness parallel to material fiber.
     ft90k : float
@@ -43,4 +43,18 @@ class Material(object):
         self.ft90k = ft90k
         self.fc0k = fc0k
         self.fc90k = fc90k
+
+    def get_actual_location(self):
+        """
+        Location of the node in the actual configuration.
+
+        Returns
+        -------
+        location: ndarray
+            Numpy array containing the reference coordinates X and Y.
+        """
+        x = self.x
+        y = self.y
+
+        return np.array([x,y], dtype=float)
         
