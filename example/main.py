@@ -18,20 +18,22 @@ testmodel.add_material(id=1, density=2,youngs_modulus=3,fmk=4,ft0k=5,ft90k=6,fc0
 testmodel.add_crosssection(id=1, area=0.5, Iz=0.1)
 
 
-material = testmodel.get_material(id=2)
+material = testmodel.get_material(id=1)
+print(material)
+
 node = testmodel.get_node(id=1)
+print(node)
 
+crosssection=testmodel.get_crosssection(id=1)
+print(crosssection)
 
+testmodel.add_element(id='A', node_a=1, node_b=2, crosssection=1, material=1)
+testmodel.add_element(id='B', node_a=2, node_b=3, crosssection=1, material=1)
+testmodel.add_element(id='C', node_a=2, node_b=3, crosssection=1, material=1)
 
+testmodel.add_loadclass(id=1, loadtyp='mlc_wheeled', loadclass=12)
 
-
-
-
-# print(testmodel.nodes)
-
-# testmodel.add_node(key=3)
-
-# print(testmodel.nodes)
+load = testmodel._loadclasses[1].get_loadclass_value('mlc_tracked', 12, 'weight')
 
 
 
