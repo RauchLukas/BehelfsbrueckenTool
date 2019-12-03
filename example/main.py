@@ -19,21 +19,22 @@ testmodel.add_crosssection(id=1, area=0.5, Iz=0.1)
 
 
 material = testmodel.get_material(id=1)
-print(material)
-
 node = testmodel.get_node(id=1)
-print(node)
-
 crosssection=testmodel.get_crosssection(id=1)
-print(crosssection)
 
 testmodel.add_element(id='A', node_a=1, node_b=2, crosssection=1, material=1)
 testmodel.add_element(id='B', node_a=2, node_b=3, crosssection=1, material=1)
 testmodel.add_element(id='C', node_a=2, node_b=3, crosssection=1, material=1)
 
-testmodel.add_loadclass(id=1, loadtyp='mlc_wheeled', loadclass=12)
+testmodel.add_loadclass(id=1, loadtype='mlc_wheeled', loadclass=40)
 
-load = testmodel._loadclasses[1].get_loadclass_value('mlc_tracked', 12, 'weight')
+loadclassvalue = testmodel._loadclasses[1].get_loadclass_value(12)
+
+em_mcl, eq_mcl = testmodel.calc_forces(element_id='B', load_id=1, lm1=True)
+
+
+
+
 
 
 
