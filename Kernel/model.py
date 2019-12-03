@@ -39,16 +39,16 @@ class Model(object):
         self.name = name
 
         self._nodes = dict()
-        self._node_keys = list()
+        # self._node_keys = list()
 
         self._elements = dict()
-        self._element_keys = list()
+        # self._element_keys = list()
 
         self._materials = dict()
-        self._material_keys = list()
+        # self._material_keys = list()
 
         self._crosssections = dict()
-        self._crosssection_keys = list()
+        # self._crosssection_keys = list()
 
         self.dirichlet_condtion = dict()
 
@@ -275,7 +275,7 @@ class Model(object):
         self._crosssections[id] = Crosssection(id, area, Iz)
 
 
-    def add_loadclass(self, id, loadtyp, loadclass):
+    def add_loadclass(self, id, loadtype, loadclass):
         """
         Add a new loadclass to the model environment.
         """
@@ -283,11 +283,11 @@ class Model(object):
         if id in self._loadclasses:
             raise RuntimeError('The model already contains a loadclass with id: {}' .format(id))
         
-        self._loadclasses[id] = Load(id, loadtyp, loadclass)
+        self._loadclasses[id] = Load(id, loadtype, loadclass)
 
 # === solving
 
-    def calc_forces(self, element_id, load_id):
+    def calc_forces(self, element_id, load_id, lm1=False):
         """
         Calculates the bending moment and the shearforces of the passed in element
         
@@ -297,20 +297,21 @@ class Model(object):
         id : str
             Unique ID of an existing element.
         """
-
-        if element_id not in self._elements:
-            raise RuntimeError('The model dose not contain an element with element id: {}' .format(element_id))
-        if load_id not in self._loadclasses:
-            raise RuntimeError('The model dose not contain a loadclass with load id: {}' .format(load_id))
-
-        loadtype = self._loadclasses[load_id].loadtyp
+        span = self._elements[element_id].get_actual_length()
         loadclass = self._loadclasses[load_id].loadclass
 
-        element = self._elements[element_id]
-        element_length = element.get_actual_length()
+        mlc_unit_m = self._loadclasses[load_id].get_unit_moment_mlc(loadclass, span)
+        mlc_q = self._loadclasses[load_id].get_shear_mlc(loadclass, span)
+        unit_m_max = mlc_unit_m[np.argmax(mlc_unit_m)]
+        q_max = mlc_q[np.argmax(mlc_q)]
 
-        return element_length
+        if lm1:
+            lm1_unit_m = self._loadclasses[load_id].get_unit_moment_lm1(span)
+            lm1_q = self._loadclasses[load_id].get_shear_lm1(span)
 
+            unit_m_max = max(unit_m_max, lm1_unit_m)
+            q_max = max(q_max, lm1_q)
 
+        m_max = span * unit_m_max
 
-
+        return  [m_max, q_max]
