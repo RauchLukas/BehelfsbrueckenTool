@@ -12,8 +12,8 @@ from .material import Material
 from .crosssection import Crosssection
 from .load import Load
 from .eurocode import Eurocode
-
-
+from .substructure import Substructure
+from .graphic import Graphic
 
 #FIXIT import module node
 
@@ -32,8 +32,6 @@ class Model(object):
         material : dict
             Dictionary that stores material_id : material object 
         #TODO add Crosssections
-
-    
     """
 
     def __init__(self, name):
@@ -52,6 +50,8 @@ class Model(object):
         self._crosssections = dict()
         # self._crosssection_keys = list()
 
+        self._substructures = dict()
+        
         self.dirichlet_condtion = dict()
 
         self.neumann_condition = dict()
@@ -230,6 +230,9 @@ class Model(object):
         self._elements[id] = Element(
             id, self._nodes[node_a], self._nodes[node_b], self._materials[material], self._crosssections[crosssection])
 
+        self._nodes[node_a].update_element_list(element_id=id) 
+        self._nodes[node_b].update_element_list(element_id=id) 
+
     def add_material(self,id, materialtype = 'wood',
             density=0, youngs_modulus=0, fmk=0, fvk=0, ft0k=0, ft90k=0, fc0k=0, fc90k=0):
         """Add a new material to the model.
@@ -319,8 +322,11 @@ class Model(object):
 
         m_max = span * unit_m_max
 
-        return  [m_max, q_max]
+        self._elements[element_id].forces['moment'] = m_max
+        self._elements[element_id].forces['q_a'] = q_max
+        self._elements[element_id].forces['q_e'] = q_max
 
+        return  [m_max, q_max]
 
     def design_crosssection(self, element_id, load_id, lm1=False):
         """
@@ -409,13 +415,77 @@ class Model(object):
         """
         Function that solves all elements for one certain load case.
         """
+
         out = np.empty((0,2), float)
         for i, id in enumerate(self._elements.keys()):
             element = self._elements[id]
             temp = self.solve_element(element_id=id, load_id=load_id, design=design)
 
             out = np.append(out, temp, axis=0)
-            
-            pass
-        print(out)
+
+        self.calc_supportforce_auto()
         return out
+
+    # == Substructure
+    def add_substructure(self, id):
+        """
+        # TODO fix description
+        """
+        for i in id:  
+            if i in self._substructures:
+                raise RuntimeError('The model already contains an substructure with id {}'.format(i))
+
+            self._substructures[i] = Substructure(i)
+
+    def update_substructure(self, id, hight=None, structuretype=None, load=None, marerial_id=None): 
+        """
+        # TODO fix desccription
+        """
+        if id not in self._substructures:
+            raise RuntimeError('The model dose not contains an substructure with id {}'.format(id))
+        else:
+            if hight is not self.update_substructure.__defaults__[0]:
+                self._substructures[id].hight = hight
+            if structuretype is not self.update_substructure.__defaults__[0]:
+                self._substructures[id].structuretype = structuretype
+            if load is not self.update_substructure.__defaults__[0]:
+                self._substructures[id].load = load
+            if marerial_id is not self.update_substructure.__defaults__[0]:
+                self._substructures[id].marerial_id = marerial_id
+
+            
+    def add_substructure_auto(self, id, structuretype, load, material_id): 
+        """
+        Add a new substructure element to the model.
+        """
+        if id in self._substructures:
+            raise RuntimeError('The model already contains an substructure with id {}'.format(id))
+
+        self._substructures[id] = Substructure(
+            id, structuretype, load, material_id)
+        
+    def calc_supportforce_auto(self):
+        """
+        Calculates though all substructure elements.
+        """
+        supportforce = 0
+
+        for id in self._substructures:
+            for i in self._nodes[id].elementlist:
+                supportforce = supportforce + self._elements[i].forces['q_a']
+
+            self._nodes[id].support_y = supportforce
+            supportforce = 0
+
+
+
+# == Visualization
+
+    def print_graphic(self):
+        """
+        Visualize the system.
+        """
+        Graphic(self)
+
+        
+

@@ -38,6 +38,8 @@ class Node(object):
         self.y = y
         self.reference_x = x
         self.reference_y = y
+        self.elementlist = []
+        self.support_y = None
 
     def get_actual_location(self):
         """
@@ -52,6 +54,14 @@ class Node(object):
         y = self.y
 
         return np.array([x,y], dtype=float)
+    
+    def update_element_list(self, element_id):
+        """
+        Saves the elements connected to the present node in a list.
+        """
+        self.elementlist.append(element_id)
+        pass
+
 
     
 
