@@ -40,6 +40,15 @@ class Element(object):
         self.material = material
         self.crosssection = crosssection
 
+        
+
+        # internal storage
+        self.forces = {
+            'moment' : 0,
+            'q_a' : 0,
+            'q_e' : 0 
+        }
+
 
 
         # self.length = float

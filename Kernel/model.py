@@ -5,13 +5,15 @@ Authors: Lukas Rauch
 
 import numpy as np
 import numpy.linalg as la
+import operator 
 from .node import Node
 from .element import Element
 from .material import Material
 from .crosssection import Crosssection
 from .load import Load
-
-
+from .eurocode import Eurocode
+from .substructure import Substructure
+from .graphic import Graphic
 
 #FIXIT import module node
 
@@ -30,8 +32,6 @@ class Model(object):
         material : dict
             Dictionary that stores material_id : material object 
         #TODO add Crosssections
-
-    
     """
 
     def __init__(self, name):
@@ -39,22 +39,27 @@ class Model(object):
         self.name = name
 
         self._nodes = dict()
-        self._node_keys = list()
+        # self._node_keys = list()
 
         self._elements = dict()
-        self._element_keys = list()
+        # self._element_keys = list()
 
         self._materials = dict()
-        self._material_keys = list()
+        # self._material_keys = list()
 
         self._crosssections = dict()
-        self._crosssection_keys = list()
+        # self._crosssection_keys = list()
 
+        self._substructures = dict()
+        
         self.dirichlet_condtion = dict()
 
         self.neumann_condition = dict()
 
         self._loadclasses = dict()
+
+        self.ec = Eurocode()
+        pass
 
 
 # === get model information
@@ -223,10 +228,13 @@ class Model(object):
             raise RuntimeError('The model does not contain a node with id {}'.format(node_b))
 
         self._elements[id] = Element(
-            id, self._nodes[node_a], self._nodes[node_b], self._crosssections[crosssection], self._materials[material])
+            id, self._nodes[node_a], self._nodes[node_b], self._materials[material], self._crosssections[crosssection])
 
-    def add_material(self,id, 
-            density=0, youngs_modulus=0, fmk=0, ft0k=0, ft90k=0, fc0k=0, fc90k=0):
+        self._nodes[node_a].update_element_list(element_id=id) 
+        self._nodes[node_b].update_element_list(element_id=id) 
+
+    def add_material(self,id, materialtype = 'wood',
+            density=0, youngs_modulus=0, fmk=0, fvk=0, ft0k=0, ft90k=0, fc0k=0, fc90k=0):
         """Add a new material to the model.
 
         Parameters 
@@ -253,9 +261,9 @@ class Model(object):
             raise RuntimeError('The model already contains a material with id: {}' .format(id))
 
         self._materials[id] = Material(
-            id, density, youngs_modulus, fmk, ft0k, ft90k, fc0k, fc90k)
+            id, materialtype, density, youngs_modulus, fmk, fvk, ft0k, ft90k, fc0k, fc90k)
         
-    def add_crosssection(self, id, area, Iz):
+    def add_crosssection(self, id, hight, width):
         """
         Add a new local element cross section to the model
 
@@ -272,10 +280,10 @@ class Model(object):
         if id in self._crosssections:
             raise RuntimeError('The model already contains a cross section with id: {}' .format(id))
 
-        self._crosssections[id] = Crosssection(id, area, Iz)
+        self._crosssections[id] = Crosssection(id, hight, width)
 
 
-    def add_loadclass(self, id, loadtyp, loadclass):
+    def add_loadclass(self, id, loadtype, loadclass):
         """
         Add a new loadclass to the model environment.
         """
@@ -283,11 +291,11 @@ class Model(object):
         if id in self._loadclasses:
             raise RuntimeError('The model already contains a loadclass with id: {}' .format(id))
         
-        self._loadclasses[id] = Load(id, loadtyp, loadclass)
+        self._loadclasses[id] = Load(id, loadtype, loadclass)
 
 # === solving
 
-    def calc_forces(self, element_id, load_id):
+    def calc_forces(self, element_id, load_id, lm1=False):
         """
         Calculates the bending moment and the shearforces of the passed in element
         
@@ -297,20 +305,187 @@ class Model(object):
         id : str
             Unique ID of an existing element.
         """
-
-        if element_id not in self._elements:
-            raise RuntimeError('The model dose not contain an element with element id: {}' .format(element_id))
-        if load_id not in self._loadclasses:
-            raise RuntimeError('The model dose not contain a loadclass with load id: {}' .format(load_id))
-
-        loadtype = self._loadclasses[load_id].loadtyp
+        span = self._elements[element_id].get_actual_length()
         loadclass = self._loadclasses[load_id].loadclass
 
-        element = self._elements[element_id]
-        element_length = element.get_actual_length()
+        mlc_unit_m = self._loadclasses[load_id].get_unit_moment_mlc(loadclass, span)
+        mlc_q = self._loadclasses[load_id].get_shear_mlc(loadclass, span)
+        unit_m_max = mlc_unit_m[np.argmax(mlc_unit_m)]
+        q_max = mlc_q[np.argmax(mlc_q)]
 
-        return element_length
+        if lm1:
+            lm1_unit_m = self._loadclasses[load_id].get_unit_moment_lm1(span)
+            lm1_q = self._loadclasses[load_id].get_shear_lm1(span)
+
+            unit_m_max = max(unit_m_max, lm1_unit_m)
+            q_max = max(q_max, lm1_q)
+
+        m_max = span * unit_m_max
+
+        self._elements[element_id].forces['moment'] = m_max
+        self._elements[element_id].forces['q_a'] = q_max
+        self._elements[element_id].forces['q_e'] = q_max
+
+        return  [m_max, q_max]
+
+    def design_crosssection(self, element_id, load_id, lm1=False):
+        """
+        Tool for designing a given cross section by the passed in load.
+        distinguishes by the material type
+        """
+
+        Gg = self.ec.Gg
+        Gq = self.ec.Gq
+
+        materialtype = self._elements[element_id].material.materialtype 
+        material = self._elements[element_id].material
+        crosssection = self._elements[element_id].crosssection
+        
+        Wy = crosssection.Wy
+        mk_max , qk_max =  self.calc_forces(element_id, load_id, lm1=False)
+
+        if materialtype == 'wood':
+            kcr = self._materials[material.id].get_kcr()
+            kmod = self._materials[material.id].get_kmod(nkl=1, kled='kurz')
+            
+            kh = (150/crosssection.hight*1000)**0.2  # TODO fix problem with variable units. kh has to be [mm] !
+            if kh >= 1.3:
+                kh = 1.3
+            if kh <= 1.0:
+                kh = 1.0
+
+            fmk = material.fmk
+            fvk = material.fvk
+
+            Gm = self.ec.Gm_w
+            fmd = fmk/Gm
+            fvd = fvk/Gm
+
+            nu_mk = mk_max/(1000*Wy*fmk)                                # fix Teislicherheitsbeiwerte
+            nu_qk = 1.5*qk_max/(1000*kcr*crosssection.area*fvk)      # fix Teislicherheitsbeiwerte 
+            
+            nu_md = Gq*mk_max/(1000*Wy*fmd)                             # fix Teislicherheitsbeiwerte
+            nu_qd = 1.5*Gq*qk_max/(1000*kcr*crosssection.area*fvd)     # fix Teislicherheitsbeiwerte 
+
+        elif materialtype == 'steal':
+            Gm = self.ec.Gm_s0
+
+            fyk = material.fmk
+            fyd = fyk/Gm
+            av = 0.4*crosssection.area      # TODO fix correct crosssection area web - 0.4 is only approximation 
+
+            nu_mk = mk_max/(1000*Wy*fyk)
+            nu_qk = np.sqrt(3)*qk_max/(1000*av*fyk)
+
+            nu_vmk =  nu_mk**2 + 3*nu_qk**2
+            
+            nu_md = Gq*mk_max/(1000*Wy*fyd)
+            nu_qd = np.sqrt(3)*Gq*qk_max/(1000*av*fyd)    
+            
+            nu_vmd =  nu_md**2 + 3*nu_qd**2
+
+        else:
+            raise RuntimeError('Material with type "{}" is not part of the library. Solving the system is not possible!' .format(id))
+        
+        return {'nu_mk': nu_mk, 'nu_qk': nu_qk, 'nu_md': nu_md, 'nu_qd': nu_qd}
+
+    def solve_element(self, element_id, load_id, lm1=False, design=True):
+        """
+        Function that solves a single element.
+        """
+        results = self.design_crosssection(element_id=element_id, load_id=load_id, lm1=lm1)
+
+        nu_char = np.array([[results['nu_mk'], results['nu_qk']]], dtype=float)
+        nu_desi = np.array([[results['nu_md'], results['nu_qd']]], dtype=float)
+        
+        nu_all = results.values()
+
+        # if max(nu_all) >= 1.0:
+        #     print('Nachweis nicht erbracht! Maximale Querschnittsausnutzung {:.2f}% ' .format(max(nu_all)*100))
+        # else:
+        #     print('Nachweis erbracht! Maximale Querschnittsausnutzung {:.2f}% ' .format(max(nu_all)*100))
+        # pass
+
+        if design:
+            return nu_desi
+        else:
+            return nu_char
+
+    def solve(self, load_id, design=True):
+        """
+        Function that solves all elements for one certain load case.
+        """
+
+        out = np.empty((0,2), float)
+        for i, id in enumerate(self._elements.keys()):
+            element = self._elements[id]
+            temp = self.solve_element(element_id=id, load_id=load_id, design=design)
+
+            out = np.append(out, temp, axis=0)
+
+        self.calc_supportforce_auto()
+        return out
+
+    # == Substructure
+    def add_substructure(self, id):
+        """
+        # TODO fix description
+        """
+        for i in id:  
+            if i in self._substructures:
+                raise RuntimeError('The model already contains an substructure with id {}'.format(i))
+
+            self._substructures[i] = Substructure(i)
+
+    def update_substructure(self, id, hight=None, structuretype=None, load=None, marerial_id=None): 
+        """
+        # TODO fix desccription
+        """
+        if id not in self._substructures:
+            raise RuntimeError('The model dose not contains an substructure with id {}'.format(id))
+        else:
+            if hight is not self.update_substructure.__defaults__[0]:
+                self._substructures[id].hight = hight
+            if structuretype is not self.update_substructure.__defaults__[0]:
+                self._substructures[id].structuretype = structuretype
+            if load is not self.update_substructure.__defaults__[0]:
+                self._substructures[id].load = load
+            if marerial_id is not self.update_substructure.__defaults__[0]:
+                self._substructures[id].marerial_id = marerial_id
+
+            
+    def add_substructure_auto(self, id, structuretype, load, material_id): 
+        """
+        Add a new substructure element to the model.
+        """
+        if id in self._substructures:
+            raise RuntimeError('The model already contains an substructure with id {}'.format(id))
+
+        self._substructures[id] = Substructure(
+            id, structuretype, load, material_id)
+        
+    def calc_supportforce_auto(self):
+        """
+        Calculates though all substructure elements.
+        """
+        supportforce = 0
+
+        for id in self._substructures:
+            for i in self._nodes[id].elementlist:
+                supportforce = supportforce + self._elements[i].forces['q_a']
+
+            self._nodes[id].support_y = supportforce
+            supportforce = 0
 
 
 
+# == Visualization
+
+    def print_graphic(self):
+        """
+        Visualize the system.
+        """
+        Graphic(self)
+
+        
 

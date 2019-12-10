@@ -19,10 +19,18 @@ class Crosssection(object):
 
     """
 
-    def __init__(self, id, area, Iz):
+    def __init__(self, id, hight, width):
         """
         creating a new local element crosssection.
         """
         self.id = id
-        self.area = area 
-        self.Iz = Iz
+        self.hight = hight 
+        self.width = width 
+
+        self.Iy = width * hight**3 / 12
+        self.Iz = hight * width**3 / 12
+
+        self.Wy = width * hight**2 / 6
+        self.Wz = hight * width**2 / 6
+
+        self.area = hight * width
