@@ -23,7 +23,6 @@ if sys.version_info < (3, 5):
     raise RuntimeError("The BB Tool requires at least Python 3.5!")
 
 from .model import Model
-from .graphic import Graphic
 # from .node import Node
 # from .element import Element
 # from .material import Material
